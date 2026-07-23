@@ -1,0 +1,6 @@
+table Task {
+    id: ulong;
+    text: string;
+}
+
+root_type Task;
