@@ -13,8 +13,8 @@ objectbox-db/
 
 # ==== 敏感配置 / 密钥（绝不能提交）====
 # 含真实 api_key 的运行时配置，仓库中只保留 *.example.json 模板
-test/embedding_test/emb_config.json
-apps/rag_basic/rag_config.json
+examples/tutorials/embedding_test/emb_config.json
+examples/rag_apps/rag_basic/rag_config.json
 
 # ==== 编辑器 / IDE ====
 .vscode/settings.json

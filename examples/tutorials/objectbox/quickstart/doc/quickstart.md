@@ -81,7 +81,7 @@ root_type Task;
 ## 第二步：生成绑定代码
 
 使用 [ObjectBox Generator](https://github.com/objectbox/objectbox-generator) 根据 `.fbs` 生成绑定。
-在 `test/objectbox/quickstart/` 目录下执行：
+在 `examples/tutorials/objectbox/quickstart/` 目录下执行：
 
 ```bash
 objectbox-generator -cpp obx/task.fbs
@@ -169,7 +169,7 @@ for (const auto& t : all) {
 ## 第六步：编译与运行
 
 ```bash
-cd test/objectbox/quickstart
+cd examples/tutorials/objectbox/quickstart
 mkdir -p build && cd build
 cmake ..
 cmake --build .

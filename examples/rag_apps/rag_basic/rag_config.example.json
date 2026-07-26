@@ -1,0 +1,17 @@
+{
+    "embedding": {
+        "base_url": "https://api.siliconflow.cn/v1",
+        "api_key": "sk-your-siliconflow-key-here",
+        "model": "BAAI/bge-m3"
+    },
+    "chat": {
+        "base_url": "https://api.deepseek.com/v1",
+        "api_key": "sk-your-deepseek-key-here",
+        "model": "deepseek-v4-pro"
+    },
+    "rerank": {
+        "base_url": "https://api.siliconflow.cn/v1",
+        "api_key": "sk-your-siliconflow-key-here",
+        "model": "BAAI/bge-reranker-v2-m3"
+    }
+}

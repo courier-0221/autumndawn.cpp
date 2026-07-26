@@ -5,7 +5,7 @@ project(obxdemo)
 set(CMAKE_CXX_STANDARD 17)
 
 get_filename_component(OBX_DIR
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/objectbox" ABSOLUTE)
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/objectbox" ABSOLUTE)
 
 add_library(objectbox SHARED IMPORTED)
 set_target_properties(objectbox PROPERTIES

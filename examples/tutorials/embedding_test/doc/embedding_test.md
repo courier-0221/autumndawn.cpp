@@ -87,10 +87,10 @@ root_type Document;
 
 ---
 
-## 4. 项目目录结构（`test/embedding_test/`）
+## 4. 项目目录结构（`examples/tutorials/embedding_test/`）
 
 ```
-test/embedding_test/
+examples/tutorials/embedding_test/
 ├── doc/design.md              # 本设计文档
 ├── CMakeLists.txt             # 引入 objectbox + libcurl + nlohmann/json
 ├── main.cpp                   # 交互式 CLI：import / add / search / exit
@@ -98,17 +98,18 @@ test/embedding_test/
 ├── siliconflow_client.hpp/.cpp # 封装 SiliconFlow Embedding HTTP 调用
 ├── config.hpp/.cpp            # emb_config.json 加载
 ├── emb_config.json            # 运行时配置（base_url / api_key / model）
-├── corpus_sample.txt          # 示例语料
 └── obx/                       # ObjectBox schema 目录
     ├── document.fbs           # 手写：FlatBuffers Schema（含 HNSW 向量索引）
     ├── document.obx.hpp/.cpp  # Generator 生成（DO NOT EDIT）
     └── objectbox-model.h/json # Generator 生成（json 必须 commit，记录 ID/UID）
 ```
 
+示例语料统一放在仓库根目录的 `data/corpus/corpus_sample.txt`，构建时会自动拷贝到本目录的构建产物中，方便 `examples/rag_apps/rag_basic` 等其他 demo 共用。
+
 重新生成 obx 绑定代码（仅编辑 `document.fbs` 后需要）：
 
 ```bash
-cd test/embedding_test
+cd examples/tutorials/embedding_test
 objectbox-generator -cpp obx/document.fbs
 ```
 
@@ -180,7 +181,7 @@ auto results = queryByVector.findWithScores(); // vector<pair<Document, double>>
 ## 6. 如何运行
 
 ```bash
-cd test/embedding_test
+cd examples/tutorials/embedding_test
 mkdir -p build && cd build
 cmake .. && make
 ./embedding_test
