@@ -1,6 +1,8 @@
-#include "rag/inference/embedding_client.hpp"
+#include "siliconflow_embedding_client.hpp"
 
 #include <nlohmann/json.hpp>
+
+#include "rag/inference/inference_error.hpp"
 
 #include "../http_client.hpp"
 

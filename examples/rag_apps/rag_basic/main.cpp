@@ -21,9 +21,8 @@
 
 #include "rag/config.hpp"
 #include "rag/generator.hpp"
-#include "rag/inference/chat_client.hpp"
-#include "rag/inference/embedding_client.hpp"
 #include "rag/log.hpp"
+#include "rag/model_factory.hpp"
 #include "rag/objectbox_retriever.hpp"
 #include "rag/pipeline.hpp"
 #include "rag/text_splitter.hpp"
@@ -98,18 +97,23 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    auto embedder = std::make_shared<rag::inference::SiliconFlowEmbeddingClient>(
-        cfg.embedding.baseUrl, cfg.embedding.apiKey, cfg.embedding.model, /*dim=*/1024);
-
-    auto chatClient = std::make_shared<rag::inference::DeepSeekChatClient>(
-        cfg.chat.baseUrl, cfg.chat.apiKey, cfg.chat.model);
+    // 由工厂按配置里的 provider 装配推理模型（cloud / local）。
+    std::shared_ptr<rag::inference::IEmbeddingModel> embModel;
+    std::shared_ptr<rag::inference::IChatModel> chatModel;
+    try {
+        embModel = rag::createEmbeddingModel(cfg.embedding, rag::kEmbeddingDim);
+        chatModel = rag::createChatModel(cfg.chat);
+    } catch (const std::exception& e) {
+        LOG(ERROR) << "Failed to create inference models: " << e.what();
+        return 1;
+    }
 
     obx::Options options(rag::createRagModel());
     options.directory("objectbox-db");
     obx::Store store(options);
 
-    auto retriever = std::make_shared<rag::ObjectBoxRetriever>(store, embedder);
-    auto generator = std::make_shared<rag::ChatGenerator>(chatClient);
+    auto retriever = std::make_shared<rag::ObjectBoxRetriever>(store, embModel);
+    auto generator = std::make_shared<rag::ChatGenerator>(chatModel);
     rag::RagPipeline pipeline(retriever, generator);
 
     rag::RecursiveCharacterTextSplitter splitter;

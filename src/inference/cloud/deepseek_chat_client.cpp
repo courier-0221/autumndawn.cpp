@@ -1,6 +1,8 @@
-#include "rag/inference/chat_client.hpp"
+#include "deepseek_chat_client.hpp"
 
 #include <nlohmann/json.hpp>
+
+#include "rag/inference/inference_error.hpp"
 
 #include "../http_client.hpp"
 

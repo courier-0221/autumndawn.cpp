@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include "rag/inference/chat_client.hpp"
+#include "rag/inference/chat_model.hpp"
 #include "rag/retriever.hpp"
 
 namespace autumndawn::rag {
@@ -18,7 +18,7 @@ public:
                                  const std::vector<RetrievedChunk>& contexts) = 0;
 };
 
-/// 基于 IChatClient 的通用 generator：用一个 prompt 模板把上下文塞进 user message。
+/// 基于 IChatModel 的通用 generator：用一个 prompt 模板把上下文塞进 user message。
 /// 默认模板足以跑通 v0.1；后续可通过构造函数替换。
 class ChatGenerator : public IGenerator {
 public:
@@ -32,15 +32,15 @@ public:
         inference::ChatOptions chat;
     };
 
-    explicit ChatGenerator(std::shared_ptr<inference::IChatClient> chat)
+    explicit ChatGenerator(std::shared_ptr<inference::IChatModel> chat)
         : ChatGenerator(std::move(chat), Options{}) {}
-    ChatGenerator(std::shared_ptr<inference::IChatClient> chat, Options options);
+    ChatGenerator(std::shared_ptr<inference::IChatModel> chat, Options options);
 
     std::string generate(const std::string& query,
                          const std::vector<RetrievedChunk>& contexts) override;
 
 private:
-    std::shared_ptr<inference::IChatClient> chat_;
+    std::shared_ptr<inference::IChatModel> chat_;
     Options options_;
 };
 

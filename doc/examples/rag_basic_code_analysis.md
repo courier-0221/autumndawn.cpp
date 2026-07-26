@@ -40,13 +40,18 @@ cp rag_config.example.json rag_config.json   # 然后填入你的 API key
 
 `rag_config.json` 结构（见 [rag_config.example.json](../../examples/rag_apps/rag_basic/rag_config.example.json)）：
 
-| 段 | 用途 | v0.1 默认 |
-|---|---|---|
-| `embedding` | SiliconFlow Embedding API | `BAAI/bge-m3`（1024 维） |
-| `chat` | DeepSeek Chat API | `deepseek-v4-pro` |
-| `rerank` | 预留给 v0.3 的重排序 | v0.1 未启用，可留空/不校验 |
+| 段 | 用途 | provider | 默认模型 |
+|---|---|---|---|
+| `embedding` | Embedding API | `siliconflow` | `BAAI/bge-m3`（1024 维） |
+| `chat` | Chat API | `deepseek` | `deepseek-v4-pro` |
+| `rerank` | 重排序（可选，v0.1 未接入 pipeline） | `siliconflow` | `BAAI/bge-reranker-v2-m3` |
 
-`loadRagConfig()` 会拒绝 api_key 为空或明显是 placeholder 的配置，启动即失败并给出提示。
+三个段结构一致，由 `provider` 字段判别后端：`siliconflow` / `deepseek` / `openai_compatible` 走云端
+（要求 `base_url`/`api_key`/`model`）；`llama_cpp` / `onnx` 为端侧进程内推理预留（要求 `model_path`）。
+`provider` 缺省且存在 `base_url` 时按云端解析，旧格式配置无需修改。
+
+`loadRagConfig()` 会拒绝 embedding/chat 段 api_key 为空或明显是 placeholder 的配置，启动即失败并给出提示；
+`rerank` 段可选——整段缺失或 api_key 是 placeholder 时静默视为未启用。
 
 ## 3. 运行
 
@@ -104,7 +109,7 @@ Stored documents: 4
 graph TB
     A[main 启动] --> B[检查 ObjectBox 向量检索能力]
     B --> C[loadRagConfig 读 rag_config.json]
-    C --> D[创建 SiliconFlowEmbeddingClient / DeepSeekChatClient]
+    C --> D[工厂按 provider 装配 IEmbeddingModel / IChatModel]
     D --> E[打开 obx::Store objectbox-db]
     E --> F[组装 ObjectBoxRetriever + ChatGenerator → RagPipeline]
     F --> G[REPL 循环: ingest / ask / ls / clear]
@@ -114,13 +119,15 @@ graph TB
 
 1. `#define OBX_CPP_FILE`：让 `objectbox.hpp` 的模板实现在本编译单元实例化（ObjectBox C++ 绑定的单 TU 约定）。
 2. `loadRagConfig(configPath)`：解析 JSON 配置，失败抛 `ConfigError`，提示用户从 example 拷贝。
-3. 创建两个云端客户端（`shared_ptr`，按接口持有）：
-   - `SiliconFlowEmbeddingClient`：硬编码 `dim=1024`，与 bge-m3 输出维度及 ObjectBox 里 HNSW 索引维度一致。
-   - `DeepSeekChatClient`：模型名来自配置。
+3. 经 `model_factory` 按配置里的 `provider` 装配两个推理模型（`shared_ptr`，按接口持有）：
+   - `createEmbeddingModel(cfg.embedding, kEmbeddingDim)` → `IEmbeddingModel`；`kEmbeddingDim=1024` 与 bge-m3 输出维度及 ObjectBox 里 HNSW 索引维度一致，client 首次调用时校验。
+   - `createChatModel(cfg.chat)` → `IChatModel`。
+   当前 provider 均为云端，实际创建的是 `SiliconFlowEmbeddingClient` / `DeepSeekChatClient`
+  （实现在 `src/inference/cloud/`，头文件不对外暴露）；`provider` 写成 `llama_cpp` / `onnx` 会在启动时报错（端侧推理尚未实现）。
 4. 打开 ObjectBox：`obx::Options options(rag::createRagModel())` 加载 `Document` 实体模型（生成代码在 `src/obx/`），库目录固定为 `objectbox-db`。
 5. 组装管线：
-   - `ObjectBoxRetriever(store, embedder)` 实现 `IRetriever`；
-   - `ChatGenerator(chatClient)` 实现 `IGenerator`（内置中文 system prompt + `{context}`/`{question}` 模板）；
+   - `ObjectBoxRetriever(store, embModel)` 实现 `IRetriever`；
+   - `ChatGenerator(chatModel)` 实现 `IGenerator`（内置中文 system prompt + `{context}`/`{question}` 模板）；
    - `RagPipeline(retriever, generator)` 就是最直白的 "retrieve → generate" 两段式。
 6. `RecursiveCharacterTextSplitter` 用默认参数：chunk ≤ 1200 字节、相邻重叠 120 字节，按 `"\n\n" → "\n" → "。" → ...` 递归切分。
 
@@ -155,18 +162,23 @@ pipeline.ask(question, topK)
 
 | 组件 | 头文件 | 在 rag_basic 中的角色 |
 |---|---|---|
-| `loadRagConfig` / `RagConfig` | [rag/config.hpp](../include/rag/config.hpp) | 三段式云端 API 配置加载与校验 |
-| `SiliconFlowEmbeddingClient` | [rag/inference/embedding_client.hpp](../include/rag/inference/embedding_client.hpp) | 文本 → 1024 维向量 |
-| `DeepSeekChatClient` | [rag/inference/chat_client.hpp](../include/rag/inference/chat_client.hpp) | 调 DeepSeek chat completion |
+| `loadRagConfig` / `RagConfig` | [rag/config.hpp](../include/rag/config.hpp) | provider 判别的推理后端配置（cloud/local）加载与校验 |
+| `IEmbeddingModel` | [rag/inference/embedding_model.hpp](../include/rag/inference/embedding_model.hpp) | embedding 抽象：文本 → 1024 维向量 |
+| `IChatModel` | [rag/inference/chat_model.hpp](../include/rag/inference/chat_model.hpp) | chat 抽象：多轮消息 → 回复 |
+| `IRerankModel` | [rag/inference/rerank_model.hpp](../include/rag/inference/rerank_model.hpp) | rerank 抽象（v0.1 未接入 pipeline） |
+| `createEmbeddingModel` / `createChatModel` / `createRerankModel` | [rag/model_factory.hpp](../include/rag/model_factory.hpp) | 按 provider 装配推理模型 |
 | `createRagModel` / `ObjectBoxRetriever` | [rag/objectbox_retriever.hpp](../include/rag/objectbox_retriever.hpp) | ObjectBox HNSW 向量存取与检索 |
 | `RecursiveCharacterTextSplitter` | [rag/text_splitter.hpp](../include/rag/text_splitter.hpp) | ingest 前的文本切块 |
 | `ChatGenerator` | [rag/generator.hpp](../include/rag/generator.hpp) | prompt 组装 + LLM 生成 |
 | `RagPipeline` | [rag/pipeline.hpp](../include/rag/pipeline.hpp) | retrieve → generate 编排 |
 | `RetrievedChunk` / `IRetriever` | [rag/retriever.hpp](../include/rag/retriever.hpp) | 检索结果与检索器抽象 |
 
+> 具体实现类（`SiliconFlowEmbeddingClient` / `DeepSeekChatClient` / `SiliconFlowRerankClient`）的头文件收在
+> `src/inference/cloud/` 内部，不暴露到 `include/`，外部只能经 `model_factory` 创建。
+
 ## 5. 已知限制（v0.1）
 
 - splitter 按**字节数**切分，中文一个字 3 字节（UTF-8），1200 字节 ≈ 400 字；切块边界可能切在多字节字符附近，靠重叠区缓解。
 - 每次 ingest 都调一次云端批量 embedding，大文件会受 API 限流影响；没有去重，重复 ingest 同一文件会产生重复 chunk。
-- 检索只有单 query 向量召回，没有 multi-query / rerank（`rerank` 配置段是预留的）。
+- 检索只有单 query 向量召回，没有 multi-query / rerank。rerank 零件已就绪（`IRerankModel` + `SiliconFlowRerankClient` + 工厂），v0.3 将以 `RerankingRetriever` 装饰器接入。
 - 数据库目录固定为 CWD 下的 `objectbox-db`，换目录运行就是换了一个库。

@@ -4,7 +4,7 @@
 
 namespace autumndawn::rag {
 
-ChatGenerator::ChatGenerator(std::shared_ptr<inference::IChatClient> chat, Options options)
+ChatGenerator::ChatGenerator(std::shared_ptr<inference::IChatModel> chat, Options options)
     : chat_(std::move(chat)), options_(std::move(options)) {}
 
 std::string ChatGenerator::generate(const std::string& query,

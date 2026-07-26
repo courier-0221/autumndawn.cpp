@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "rag/inference/embedding_client.hpp"
+#include "rag/inference/embedding_model.hpp"
 #include "rag/retriever.hpp"
 
 // 前向声明以避免把 objectbox.hpp 拖进公共头文件。
@@ -31,7 +31,7 @@ OBX_model* createRagModel();
 class ObjectBoxRetriever : public IRetriever {
 public:
     ObjectBoxRetriever(obx::Store& store,
-                       std::shared_ptr<inference::IEmbeddingClient> embedder);
+                       std::shared_ptr<inference::IEmbeddingModel> embedder);
     ~ObjectBoxRetriever() override;
 
     /// 批量写入：对 chunks 做一次批量 embedding，然后事务写入。

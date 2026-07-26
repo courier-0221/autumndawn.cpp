@@ -14,9 +14,9 @@ struct ObjectBoxRetriever::Impl {
     obx::Store& store;
     obx::Box<Document> box;
     obx::Query<Document> queryByVector;
-    std::shared_ptr<inference::IEmbeddingClient> embedder;
+    std::shared_ptr<inference::IEmbeddingModel> embedder;
 
-    Impl(obx::Store& s, std::shared_ptr<inference::IEmbeddingClient> emb)
+    Impl(obx::Store& s, std::shared_ptr<inference::IEmbeddingModel> emb)
         : store(s),
           box(s),
           queryByVector(box.query(Document_::embedding.nearestNeighbors({}, 1)).build()),
@@ -24,7 +24,7 @@ struct ObjectBoxRetriever::Impl {
 };
 
 ObjectBoxRetriever::ObjectBoxRetriever(obx::Store& store,
-                                       std::shared_ptr<inference::IEmbeddingClient> embedder)
+                                       std::shared_ptr<inference::IEmbeddingModel> embedder)
     : impl_(std::make_unique<Impl>(store, std::move(embedder))) {}
 
 ObjectBoxRetriever::~ObjectBoxRetriever() = default;

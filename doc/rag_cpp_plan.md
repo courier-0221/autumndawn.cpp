@@ -79,7 +79,7 @@
 | 课程小节 | C++ 版对应 |
 |---|---|
 | 10a. Logical Routing | `LlmRouter`：让 LLM 返回 JSON `{ "route": "...", "reason": "..." }`；`nlohmann::json` 做 schema 校验；Router 是"选 pipeline"的元组件 |
-| 15. Re-ranking | 新增 `SiliconFlowRerankClient`（POST `/v1/rerank`，模型 `BAAI/bge-reranker-v2-m3`）；封装 `RerankingRetriever` 装饰器：先 top-N 召回 → rerank → top-K 返回 |
+| 15. Re-ranking | `SiliconFlowRerankClient` 已提前实现（POST `/v1/rerank`，模型 `BAAI/bge-reranker-v2-m3`）；v0.3 只需封装 `RerankingRetriever` 装饰器：先 top-N 召回 → rerank → top-K 返回 |
 
 **里程碑 v0.3**：`RagPipeline` = `Router → (若干 Retriever) → Reranker → Generator`，达到"生产级最小可用"标准。
 
@@ -120,25 +120,27 @@
 ```
 autumndawn.cpp/
 ├── include/rag/
-│   ├── inference/                      # 推理接入层：抽象接口
-│   │   ├── embedding_client.hpp        #   IEmbeddingClient
-│   │   ├── chat_client.hpp             #   IChatClient
-│   │   └── rerank_client.hpp           #   IRerankClient
+│   ├── inference/                      # 推理接入层：抽象接口（部署形态无关）
+│   │   ├── inference_error.hpp         #   InferenceError
+│   │   ├── embedding_model.hpp         #   IEmbeddingModel
+│   │   ├── chat_model.hpp              #   IChatModel
+│   │   └── rerank_model.hpp            #   IRerankModel
 │   ├── retriever.hpp                   # IRetriever
 │   ├── generator.hpp                   # IGenerator
 │   ├── text_splitter.hpp
 │   ├── prompt_template.hpp
 │   ├── fusion.hpp                      # RRF / weighted
 │   ├── router.hpp
+│   ├── model_factory.hpp               # 推理模型装配工厂（按 provider 创建 I*Model）
 │   └── pipeline.hpp                    # RagPipeline
 ├── src/
 │   ├── inference/                      # 推理接入层：实现
 │   │   ├── http_client.hpp/.cpp        #   通用 HTTP 小工具（TLS / 超时 / 429 退避）
-│   │   ├── cloud/                      #   云端 API 实现（当前唯一路径）
-│   │   │   ├── siliconflow_embedding_client.cpp
-│   │   │   ├── deepseek_chat_client.cpp
-│   │   │   └── siliconflow_rerank_client.cpp
-│   │   └── local/                      #   预留：未来本地推理实现
+│   │   ├── cloud/                      #   云端 API 实现（.hpp 为内部头，不暴露到 include/）
+│   │   │   ├── siliconflow_embedding_client.hpp/.cpp
+│   │   │   ├── deepseek_chat_client.hpp/.cpp
+│   │   │   └── siliconflow_rerank_client.hpp/.cpp
+│   │   └── local/                      #   预留：端侧进程内推理实现
 │   │       └── .gitkeep
 │   ├── retrieval/
 │   │   ├── objectbox_retriever.cpp
@@ -152,6 +154,8 @@ autumndawn.cpp/
 │   ├── prompt_template.cpp
 │   ├── fusion.cpp
 │   ├── router.cpp
+│   ├── config.cpp                      # provider 判别的配置加载
+│   ├── model_factory.cpp               # createEmbeddingModel / createChatModel / createRerankModel
 │   └── pipeline.cpp
 ├── examples/
 │   ├── rag_apps/               # 跟着版本迫代的 RAG 演示程序系列
@@ -179,10 +183,12 @@ CMake：顶层新增 `CMakeLists.txt`，把 `include/` + `src/` 打成 `autumnda
 **分层说明**：
 
 - **inference 层**（`inference/`）：只关心"文本 → 向量 / 消息 → 回复 / (query, docs) → 相关性分数"三件事，
-  完全不知道有 ObjectBox / retriever / pipeline 的存在。future 加本地推理（llama.cpp、bge-m3 onnx）时，
-  只需在 `src/inference/local/` 下新增实现类，实现同一组 `I*Client` 接口，上层零改动。
+  完全不知道有 ObjectBox / retriever / pipeline / config 的存在。接口按能力中性命名（`I*Model`），部署形态无关；
+  云端实现叫 `*Client`、端侧实现叫 `*Model`，实现类头文件收在 `src/inference/cloud|local/` 内部，不暴露到
+  `include/`，外部统一经 `rag/model_factory.hpp` 按配置里的 `provider` 字段装配。future 加端侧进程内推理
+  （llama.cpp、bge-m3 onnx）时，只需在 `src/inference/local/` 下新增实现类，实现同一组 `I*Model` 接口，上层零改动。
 - **retrieval 层**（`retrieval/`）：`IRetriever` 及其所有装饰器（multi-query / hyde / step-back / rerank / corrective / semantic-router）。
-  只依赖 `IEmbeddingClient` / `IChatClient` / `IRerankClient` 抽象接口，不依赖任何具体供应商。
+  只依赖 `IEmbeddingModel` / `IChatModel` / `IRerankModel` 抽象接口，不依赖任何具体供应商。
 - **pipeline 层**：`RagPipeline` = `Router → Retriever → Generator`，最上层组合器。
 
 **命名空间约定**：
@@ -193,8 +199,9 @@ C++ 语言级的分层用 `namespace` 来表达，与目录一一对应。顶层
 namespace autumndawn::rag {                        // 顶层：pipeline / generator / text_splitter / prompt_template / fusion / router
 
     namespace inference {                          // 推理接入层
-        // IEmbeddingClient / IChatClient / IRerankClient
-        // SiliconFlowEmbeddingClient / DeepSeekChatClient / SiliconFlowRerankClient
+        // 接口：IEmbeddingModel / IChatModel / IRerankModel（include/rag/inference/）
+        // 云端实现：SiliconFlowEmbeddingClient / DeepSeekChatClient / SiliconFlowRerankClient
+        //          （src/inference/cloud/ 内部头，经 model_factory 装配）
     }
 
     namespace retrieval {                          // 检索层
@@ -242,7 +249,7 @@ namespace autumndawn::rag {                        // 顶层：pipeline / genera
 |---|---|---|---|---|
 | Embedding | SiliconFlow | `https://api.siliconflow.cn/v1/embeddings` | `BAAI/bge-m3`（1024 维） | `SiliconFlowEmbeddingClient` ✅ 已实现 |
 | Chat | **DeepSeek** | `https://api.deepseek.com/v1/chat/completions` | `deepseek-v4-pro`（已确认） | `DeepSeekChatClient` 🆕 v0.1 |
-| Rerank | SiliconFlow | `https://api.siliconflow.cn/v1/rerank` | `BAAI/bge-reranker-v2-m3` | `SiliconFlowRerankClient` 🆕 v0.3 |
+| Rerank | SiliconFlow | `https://api.siliconflow.cn/v1/rerank` | `BAAI/bge-reranker-v2-m3` | `SiliconFlowRerankClient` ✅ 已实现 |
 
 **Chat 客户端实现方式（已定）**：
 
@@ -255,16 +262,19 @@ namespace autumndawn::rag {                        // 顶层：pipeline / genera
 ```jsonc
 {
   "embedding": {
+    "provider": "siliconflow",
     "base_url": "https://api.siliconflow.cn/v1",
     "api_key": "sk-...",
     "model": "BAAI/bge-m3"
   },
   "chat": {
+    "provider": "deepseek",
     "base_url": "https://api.deepseek.com/v1",
     "api_key": "sk-...",
     "model": "deepseek-v4-pro"
   },
   "rerank": {
+    "provider": "siliconflow",
     "base_url": "https://api.siliconflow.cn/v1",
     "api_key": "sk-...",
     "model": "BAAI/bge-reranker-v2-m3"
@@ -272,7 +282,16 @@ namespace autumndawn::rag {                        // 顶层：pipeline / genera
 }
 ```
 
-`rag_config.json` 加入 `.gitignore`；仓库只保留 `rag_config.example.json`。日志中不打印任何 `api_key`。为了向后兼容，`config.hpp` 先保留 `loadConfig("emb_config.json")` 的能力，v0.2 起统一到新格式。
+`rag_config.json` 加入 `.gitignore`；仓库只保留 `rag_config.example.json`。日志中不打印任何 `api_key`。
+
+**provider 判别与工厂装配（v0.1 落地）**：三个段结构一致，由 `provider` 字段判别后端——
+cloud（`siliconflow` / `deepseek` / `openai_compatible`）要求 `base_url`/`api_key`/`model`；
+local（`llama_cpp` / `onnx`，端侧进程内推理预留）要求 `model_path`（可选 `n_ctx`/`n_threads`/`n_gpu_layers`）。
+配置结构为 `std::variant<CloudInferenceConfig, LocalInferenceConfig>`；`rerank` 段为 `std::optional`，
+缺失或 api_key 为占位符时视为未启用。`provider` 缺省且存在 `base_url` 时按 cloud 解析（向后兼容旧配置）。
+装配统一走 `rag/model_factory.hpp` 的 `createEmbeddingModel` / `createChatModel` / `createRerankModel`：
+cloud 分支返回对应 `*Client`，local 分支目前抛 `ConfigError`（实现待落地，届时配套 CMake 条件编译选项）。
+接口约定实现不保证线程安全，调用方串行访问；`IChatModel` 后续按需要以默认实现方式补 `chatStream`。
 
 ### 3.3 分词 / Chunking
 
@@ -298,7 +317,7 @@ namespace autumndawn::rag {                        // 顶层：pipeline / genera
 ### 3.7 测试
 
 - 单元测试：`doctest`（单头，最省事）覆盖 `TextSplitter` / `PromptTemplate` / `fusion::rrf` / `Router` schema 校验等纯逻辑。
-- 集成测试：mock 一个 `IEmbeddingClient`（返回固定向量）+ 一个 `IGenerator`（返回固定字符串），用真实 ObjectBox 跑 pipeline，保证 CI 不消耗 API。
+- 集成测试：mock 一个 `IEmbeddingModel`（返回固定向量）+ 一个 `IGenerator`（返回固定字符串），用真实 ObjectBox 跑 pipeline，保证 CI 不消耗 API。
 
 ---
 
@@ -308,7 +327,7 @@ namespace autumndawn::rag {                        // 顶层：pipeline / genera
 |---|---|---|---|
 | **v0.1** | Phase A（P0：1–4） | 抽 `libautumndawn_rag` + `DeepSeekChatClient` + `RagPipeline` + `TextSplitter` + `examples/rag_apps/rag_basic` | `ingest corpus_sample.txt` 后 `ask` 提问，能引用相关 chunk 并生成中文答案 |
 | **v0.2** | Phase B（P0：5 / 6 / 9） | `MultiQueryRetriever` + `fusion::rrf` + `HydeRetriever` + `examples/rag_apps/rag_query_translate --strategy=...` | 同一问题 4 种策略（plain / multi-query / rrf / hyde）的召回对比打印在终端 |
-| **v0.3** | Phase C（P0：10a + 15） | `LlmRouter` + `SiliconFlowRerankClient` + `RerankingRetriever` | 多语料源自动路由 + rerank 后 top-3 相关性肉眼可见提升 |
+| **v0.3** | Phase C（P0：10a + 15） | `LlmRouter` + `RerankingRetriever`（`SiliconFlowRerankClient` 已就绪） | 多语料源自动路由 + rerank 后 top-3 相关性肉眼可见提升 |
 | **v0.4** | Phase D（P1：7 / 8 / 10b / 16 最小实现） + Phase E 接口占位 | 四个装饰器 + `include/.../future/` 接口 + `doc/future_topics.md` | 装饰器可以任意串联，占位接口 lint 通过 |
 | **v1.0** | `examples/rag_apps/rag_bench` | 多策略对比脚本 + CSV/markdown 报告 | 一份 QA 集上各策略 latency / token / recall 对比表 |
 

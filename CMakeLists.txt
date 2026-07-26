@@ -27,6 +27,7 @@ add_library(autumndawn_rag STATIC
     src/inference/http_client.cpp
     src/inference/cloud/siliconflow_embedding_client.cpp
     src/inference/cloud/deepseek_chat_client.cpp
+    src/inference/cloud/siliconflow_rerank_client.cpp
 
     # obx (ObjectBox generated code for Document entity)
     src/obx/document.obx.cpp
@@ -40,6 +41,7 @@ add_library(autumndawn_rag STATIC
     src/generator.cpp
     src/pipeline.cpp
     src/config.cpp
+    src/model_factory.cpp
 )
 
 target_include_directories(autumndawn_rag
