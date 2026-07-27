@@ -1,4 +1,4 @@
-# RAG From Scratch —— C++ 实现方案与迭代计划 (v2, Review 后)
+# RAG From Scratch —— C++ 实现方案与迭代计划
 
 > 参考：<https://github.com/langchain-ai/rag-from-scratch>（5 份 notebook，18 小节）。
 > 目标：**从入门到深入理解 RAG**。C++ 版本只亲手实现"高价值 + 有代表性"的子集，其余"了解原理即可"的能力预留清晰接口，方便后续按需补肉。
@@ -7,11 +7,11 @@
 
 ---
 
-## 0. 学习路径优先级（针对"从入门到深入"目标）
+# 0. 学习路径优先级（针对"从入门到深入"目标）
 
 把 18 节按 **"手写实现的教学价值 × 生产实用度 × 工程量"** 分三档：
 
-### 🟢 P0 · 必学必写（RAG 的骨架 + 最经典的改进）
+## 🟢 P0 · 必学必写（RAG 的骨架 + 最经典的改进）
 | # | 小节 | 为什么必学 |
 |---|---|---|
 | 1–4 | Overview / Indexing / Retrieval / Generation | RAG 三段式骨架，不实现等于没入门 |
@@ -23,7 +23,7 @@
 
 > 只做完 P0，你就掌握了 90% 生产 RAG 系统的常见套路。
 
-### 🟡 P1 · 骨架实现 + 留扩展点（了解原理，代码只做最小版）
+## 🟡 P1 · 骨架实现 + 留扩展点（了解原理，代码只做最小版）
 | # | 小节 | 处理方式 |
 |---|---|---|
 | 7 | Decomposition | `IRetriever` 允许递归组合，写一个最简"拆 2 个子问题"的版本，复杂拆分留 TODO |
@@ -31,7 +31,7 @@
 | 10b | Semantic Routing | 预注册若干 route 描述向量+cosine 选路，20 行搞定 |
 | 16 | CRAG（简化版） | 只做 "LLM 给检索结果打分 → 低于阈值时用另一个 retriever" 的降级；web search 留桩 |
 
-### 🔴 P2 · 只读原理不实现（在文档留占位 + 接口 hook，将来能填肉）
+## 🔴 P2 · 只读原理不实现（在文档留占位 + 接口 hook，将来能填肉）
 | # | 小节 | 为什么先不写 | 未来怎么补 |
 |---|---|---|---|
 | 11 | Query Construction (text→SQL / self-query) | 与业务/schema 强耦合，脱离具体场景没意义 | 预留 `IStructuredQueryBuilder` 接口 |
@@ -50,23 +50,23 @@
 
 ---
 
-## 1. 课程思路 → C++ 模块映射（按优先级重排）
+# 1. 课程思路 → C++ 模块映射（按优先级重排）
 
 原课程 5 个 notebook 共 18 小节，我把它们分成 5 个阶段，逐条给出 C++ 版对应实现的着力点。
 （Python 版几乎都基于 LangChain 抽象；C++ 版我们不复刻 LangChain，而是把最小必要接口抽出来，
 避免过度设计。）
 
-### 🟢 Phase A · Baseline（P0：小节 1–4）
+## 🟢 Phase A · Baseline（P0：小节 1–4）
 | 课程小节 | 关键点 | C++ 版对应 |
 |---|---|---|
 | 1. Overview | RAG 三段式：Index → Retrieve → Generate | 定义 `IRetriever` / `IGenerator` 接口 + `RagPipeline`（组合器） |
 | 2. Indexing | Chunk → Embed → Vector Store | 复用 `SiliconFlowEmbeddingClient` + 新增 `TextSplitter`（递归按段落/字符）+ ObjectBox `Box<Document>` |
-| 3. Retrieval | 相似度检索（Cosine/Top-K） | 复用 `Document_::embedding.nearestNeighbors`，封装 `ObjectBoxRetriever` implements `IRetriever` |
+| 3. Retrieval | 相似度检索（Cosine/Top-K） | `IVectorStore` 中性接口 + `ObjectBoxVectorStore` 后端实现（`Document_::embedding.nearestNeighbors`）；`VectorStoreRetriever` 把 `IEmbeddingModel` + `IVectorStore` 组合成 `IRetriever` |
 | 4. Generation | Prompt 模板 + LLM 调用 | 新增 `DeepSeekChatClient`（OpenAI 兼容 `/v1/chat/completions`，同风格自研 HTTP）+ `PromptTemplate` |
 
 **里程碑 v0.1**：`examples/rag_apps/rag_basic/` 支持 `ingest <file>` + `ask <question>`，端到端跑通中文问答。
 
-### 🟢 Phase B · Query Translation 精选（P0：小节 5 / 6 / 9）
+## 🟢 Phase B · Query Translation 精选（P0：小节 5 / 6 / 9）
 | 课程小节 | C++ 版对应 |
 |---|---|
 | 5. Multi-Query | `MultiQueryRetriever`：装饰任意 `IRetriever`，内部调用 `IGenerator` 生成 N 条改写 query → 并联检索 → 去重合并 |
@@ -75,7 +75,7 @@
 
 **里程碑 v0.2**：`examples/rag_apps/rag_query_translate/ --strategy=multi_query|rrf|hyde|plain` 可对同一问题打印召回差异。
 
-### 🟢 Phase C · Re-rank + Routing（P0：小节 10a + 15）
+## 🟢 Phase C · Re-rank + Routing（P0：小节 10a + 15）
 | 课程小节 | C++ 版对应 |
 |---|---|
 | 10a. Logical Routing | `LlmRouter`：让 LLM 返回 JSON `{ "route": "...", "reason": "..." }`；`nlohmann::json` 做 schema 校验；Router 是"选 pipeline"的元组件 |
@@ -83,7 +83,7 @@
 
 **里程碑 v0.3**：`RagPipeline` = `Router → (若干 Retriever) → Reranker → Generator`，达到"生产级最小可用"标准。
 
-### 🟡 Phase D · P1 最小实现（小节 7 / 8 / 10b / 16）
+## 🟡 Phase D · P1 最小实现（小节 7 / 8 / 10b / 16）
 | 课程小节 | 最小实现 |
 |---|---|
 | 7. Decomposition | `DecompositionPipeline`：LLM 拆 2 个子问题 → 各自跑一次 pipeline → 拼 context 再生成，递归深度硬编码为 1 |
@@ -93,15 +93,16 @@
 
 **里程碑 v0.4**：以上 4 项均为 `IRetriever` / `IPipeline` 装饰器，可任意串联；同时把 P2 的接口占位（`IStructuredQueryBuilder`、`IIndexer`、`IReflectiveJudge`）写好但不实现。
 
-### 🔴 Phase E · P2 占位与未来扩展（小节 11 / 12 / 13 / 14 / 17 / 18）
+## 🔴 Phase E · P2 占位与未来扩展（小节 11 / 12 / 13 / 14 / 17 / 18）
 
 **不写实现，只做以下三件事**：
 1. 每个未实现能力在 `include/rag/future/` 下留一个 `xxx.hpp` 说明接口意图 + 参考 Python notebook 位置；
 2. `doc/future_topics.md` 汇总原理笔记（Multi-representation / RAPTOR / ColBERT / Self-RAG / Adaptive-RAG / Query Construction 各一节，1–2 页 md）；
 3. 在 `RagPipeline` / `Document` schema 上预留扩展点：
-   - `Document.fbs` 里注释 `// TODO(v2): summary_embedding: [float]; hnsw-dimensions=1024`；
+   - `src/storage/objectbox/document.fbs` 里注释 `// TODO(v2): summary_embedding: [float]; hnsw-dimensions=1024`；
    - `RagPipeline` 已经是"接口组合"结构，未来加 `SelfRagPipeline` / `AdaptiveRagPipeline` 只需新增类；
-   - `ObjectBoxRetriever` 支持传入 `QueryCondition`，方便未来接 `IStructuredQueryBuilder`。
+   - `IVectorStore` 未来加 `searchByVectorWithFilter(vec, topK, IStructuredQueryBuilder&)` 重载，
+     ObjectBox 后端翻译成 `QueryCondition`，其它后端可各自映射到自己的过滤 DSL。
 
 未来若真去实现 RAPTOR（小节 13），聚类用手写 mini-KMeans（≤300 行），不引入 `mlpack`/`Eigen`；所有 App 保持 CLI，不做 Web UI。
 
@@ -109,7 +110,7 @@
 
 ---
 
-## 2. 架构与目录结构演进
+# 2. 架构与目录结构演进
 
 现在 embedding_test 是一个"平铺 demo"。为了后续 5 个阶段能复用，需要把公共能力抽成静态库；
 同时把"和模型推理交互"的部分单独收拢到一个 `inference/` 子模块 —— 现在虽然只有云端 API，但从架构上就把它当作一个可替换的推理层，
@@ -125,13 +126,20 @@ autumndawn.cpp/
 │   │   ├── embedding_model.hpp         #   IEmbeddingModel
 │   │   ├── chat_model.hpp              #   IChatModel
 │   │   └── rerank_model.hpp            #   IRerankModel
-│   ├── retriever.hpp                   # IRetriever
+│   ├── storage/                        # 存储接入层：抽象接口（后端无关）
+│   │   ├── storage_error.hpp           #   StorageError
+│   │   ├── document_record.hpp         #   DocumentRecord（中性行结构）
+│   │   └── vector_store.hpp            #   IVectorStore + SearchHit
+│   ├── retrieval/                      # 检索层：通用适配器 + 装饰器
+│   │   └── vector_store_retriever.hpp  #   VectorStoreRetriever（IEmbeddingModel + IVectorStore → IRetriever）
+│   ├── retriever.hpp                   # IRetriever（顶层抽象）
 │   ├── generator.hpp                   # IGenerator
 │   ├── text_splitter.hpp
 │   ├── prompt_template.hpp
 │   ├── fusion.hpp                      # RRF / weighted
 │   ├── router.hpp
 │   ├── model_factory.hpp               # 推理模型装配工厂（按 provider 创建 I*Model）
+│   ├── store_factory.hpp               # 向量存储装配工厂（按 provider 创建 IVectorStore）
 │   └── pipeline.hpp                    # RagPipeline
 ├── src/
 │   ├── inference/                      # 推理接入层：实现
@@ -142,8 +150,14 @@ autumndawn.cpp/
 │   │   │   └── siliconflow_rerank_client.hpp/.cpp
 │   │   └── local/                      #   预留：端侧进程内推理实现
 │   │       └── .gitkeep
-│   ├── retrieval/
-│   │   ├── objectbox_retriever.cpp
+│   ├── storage/                        # 存储接入层：实现（每个后端自持一包）
+│   │   └── objectbox/                  #   ObjectBox 后端
+│   │       ├── objectbox_store.hpp/.cpp  #     实现 IVectorStore（含 OBX_CPP_FILE 唯一定义）
+│   │       ├── document.fbs              #     实体 schema（HNSW 维度硬编码 1024）
+│   │       ├── document.obx.hpp/.cpp     #     objectbox-generator 产物
+│   │       └── objectbox-model.h/.json   #     模型 + UID 追踪
+│   ├── retrieval/                      # 检索层：适配器/装饰器实现（后端无关）
+│   │   ├── vector_store_retriever.cpp
 │   │   ├── multi_query_retriever.cpp
 │   │   ├── hyde_retriever.cpp
 │   │   ├── stepback_retriever.cpp
@@ -154,8 +168,9 @@ autumndawn.cpp/
 │   ├── prompt_template.cpp
 │   ├── fusion.cpp
 │   ├── router.cpp
-│   ├── config.cpp                      # provider 判别的配置加载
+│   ├── config.cpp                      # provider 判别的配置加载（model + storage）
 │   ├── model_factory.cpp               # createEmbeddingModel / createChatModel / createRerankModel
+│   ├── store_factory.cpp               # createVectorStore（按 storage.provider 分派）
 │   └── pipeline.cpp
 ├── examples/
 │   ├── rag_apps/               # 跟着版本迫代的 RAG 演示程序系列
@@ -187,8 +202,16 @@ CMake：顶层新增 `CMakeLists.txt`，把 `include/` + `src/` 打成 `autumnda
   云端实现叫 `*Client`、端侧实现叫 `*Model`，实现类头文件收在 `src/inference/cloud|local/` 内部，不暴露到
   `include/`，外部统一经 `rag/model_factory.hpp` 按配置里的 `provider` 字段装配。future 加端侧进程内推理
   （llama.cpp、bge-m3 onnx）时，只需在 `src/inference/local/` 下新增实现类，实现同一组 `I*Model` 接口，上层零改动。
+- **storage 层**（`storage/`）：中性抽象 `IVectorStore`（`put / putBatch / count / clearAll / searchByVector`），
+  与 inference 层完全对称——只描述"向量 + 元数据 ⇄ 存储"，不感知具体后端。每个后端在 `src/storage/<backend>/`
+  下自持一包（实现类 + schema + 生成绑定 + UID 追踪），实现头文件不暴露到 `include/`，外部经 `rag/store_factory.hpp`
+  按 `storage.provider` 装配。ObjectBox 特有的 `OBX_CPP_FILE` 唯一定义收在 `src/storage/objectbox/objectbox_store.cpp`
+  里，静态库消费者（示例/App）不再需要 `#define OBX_CPP_FILE` 也不需要 `#include "objectbox.hpp"`。
+  未来接 Qdrant / FAISS / in_memory 只需新增 `src/storage/<backend>/` 目录 + factory 加一支分派，`retrieval`/`pipeline`/App 零改动。
 - **retrieval 层**（`retrieval/`）：`IRetriever` 及其所有装饰器（multi-query / hyde / step-back / rerank / corrective / semantic-router）。
-  只依赖 `IEmbeddingModel` / `IChatModel` / `IRerankModel` 抽象接口，不依赖任何具体供应商。
+  `VectorStoreRetriever` 是把 `IEmbeddingModel` + `IVectorStore` 组合成 `IRetriever` 的通用胶水（后端无关，
+  约 30 行）；装饰器只依赖 `IRetriever` / `IEmbeddingModel` / `IChatModel` / `IRerankModel` 抽象接口，
+  不 include 任何后端头。
 - **pipeline 层**：`RagPipeline` = `Router → Retriever → Generator`，最上层组合器。
 
 **命名空间约定**：
@@ -196,7 +219,7 @@ CMake：顶层新增 `CMakeLists.txt`，把 `include/` + `src/` 打成 `autumnda
 C++ 语言级的分层用 `namespace` 来表达，与目录一一对应。顶层用 `autumndawn::rag`（跟库名 `libautumndawn_rag` 和 include 前缀 `rag/` 三者对齐）：
 
 ```cpp
-namespace autumndawn::rag {                        // 顶层：pipeline / generator / text_splitter / prompt_template / fusion / router
+namespace autumndawn::rag {                        // 顶层：pipeline / generator / text_splitter / prompt_template / fusion / router / model_factory / store_factory
 
     namespace inference {                          // 推理接入层
         // 接口：IEmbeddingModel / IChatModel / IRerankModel（include/rag/inference/）
@@ -204,9 +227,13 @@ namespace autumndawn::rag {                        // 顶层：pipeline / genera
         //          （src/inference/cloud/ 内部头，经 model_factory 装配）
     }
 
-    namespace retrieval {                          // 检索层
-        // IRetriever / ObjectBoxRetriever / MultiQueryRetriever / HydeRetriever / ...
+    namespace storage {                            // 存储接入层
+        // 接口：IVectorStore / DocumentRecord / StorageError（include/rag/storage/）
+        // 后端实现：ObjectBoxVectorStore（src/storage/objectbox/ 内部头，经 store_factory 装配）
     }
+
+    // 检索层（IRetriever 在顶层 namespace，装饰器与 VectorStoreRetriever 亦然）：
+    // VectorStoreRetriever / MultiQueryRetriever / HydeRetriever / RerankingRetriever / ...
 
     namespace detail {                             // 内部工具（HttpClient、json helper 等），不对外承诺稳定
     }
@@ -225,110 +252,127 @@ namespace autumndawn::rag {                        // 顶层：pipeline / genera
 
 ---
 
-## 3. 关键技术选型
+# 3. 关键技术选型
 
-### 3.1 向量存储
+## 3.1 向量存储
 
-**主选：ObjectBox**
+**分层：先隔离，再谈实现**
+
+`include/rag/storage/vector_store.hpp` 定义中性抽象 `IVectorStore`（`put / putBatch / count / clearAll / searchByVector`）
++ 中性行结构 `DocumentRecord`。上层（`VectorStoreRetriever`、装饰器、`RagPipeline`、App）只依赖该抽象，
+不 include 任何后端头。切换后端只改配置里的 `storage.provider`。
+
+**主选后端：ObjectBox**（`src/storage/objectbox/objectbox_store.{hpp,cpp}` 实现 `IVectorStore`）
 - 已经在用，HNSW + Cosine 就够 v1.0；同库同时存原文 + 元数据 + 向量，Phase 3 的 metadata filter 很自然。
+- schema (`document.fbs`) + `objectbox-generator` 产物 + UID 追踪 (`objectbox-model.json`) 全部收在
+  `src/storage/objectbox/`，`OBX_CPP_FILE` 唯一定义也在 `objectbox_store.cpp` 里，静态库消费者不感知。
 - 缺点：只有 HNSW（无 IVF/PQ），闭源二进制无法自定义，schema 变更要跑 generator；单机、不支持水平扩展。
 
 **备选（按需引入，不进 v1.0）：**
 | 备选 | 场景 | 说明 |
 |---|---|---|
+| **in_memory**（自写，测试用） | 单测/CI 不落盘 | 一个 `std::vector<DocumentRecord>` + brute-force cosine，约 40 行 |
 | **hnswlib**（header-only） | 想要更透明的 HNSW 参数调优 / benchmark | 只做向量，元数据要另存 SQLite |
 | **FAISS** | 大规模、GPU、多种索引（IVF-PQ） | 依赖较重，暂无必要 |
 | **SQLite + vss/sqlite-vec 扩展** | 想用一个进程内 SQL | 生态偏 Python；C++ 接入需要自己包 |
-| **Qdrant / Milvus / LanceDB (远端)** | 服务化、多进程共享 | 引入 gRPC/HTTP 客户端；只有多进程共享向量库时才值得 |
 
-结论：**Phase 1~5 都用 ObjectBox；只有当我们进入 "对比索引/大规模" benchmark 场景时再引入 hnswlib 作为对照实现。**
+**加一个新后端的固定三步**：
+1. 新增 `include/rag/config.hpp` 里 `*StorageConfig` + 加入 `StorageBackendConfig` variant；
+2. 新增 `src/storage/<backend>/xxx_store.{hpp,cpp}` 实现 `IVectorStore`；
+3. `src/store_factory.cpp` 的 variant visit 里加一支 `if constexpr` 分派；
+   `src/config.cpp` 的 `parseStorageSection` 里加一支 `else if` 解析。
 
-### 3.2 Embedding / Chat / Rerank —— 三个云端 API
+`retrieval/`、`pipeline`、App 全部零改动。
+
+结论：**Phase 1~5 都用 ObjectBox 作为默认后端；`InMemoryVectorStore` 作为第二个实现在写单测时顺手补上，
+既验证抽象层不漏 ObjectBox，也为 CI 免去 ObjectBox 依赖。**
+
+## 3.2 推理接入层（Inference）
+
+**分层：先隔离，再谈实现**
+
+`include/rag/inference/{embedding,chat,rerank}_model.hpp` 定义三个中性接口
+`IEmbeddingModel` / `IChatModel` / `IRerankModel`——只描述"文本 → 向量 / 消息 → 回复 /
+(query, docs) → 相关性分数"三件事，不感知具体供应商，也不感知部署形态（云端 / 端侧）。
+上层（`VectorStoreRetriever`、`ChatGenerator`、Router、装饰器）只依赖这三个接口。实现分两类：
+
+- **云端**（`*Client`，`src/inference/cloud/`）：走 HTTPS 打远端 API；
+- **端侧**（`*Model`，`src/inference/local/`，v0.1 未落地）：进程内推理（llama.cpp / onnx）。
+
+实现头文件不暴露到 `include/`，外部一律经 `rag/model_factory.hpp` 装配。
+
+### 3.2.1 云端实现（v0.1 已落地）
 
 | 用途 | Provider | Endpoint | 模型 | 客户端 |
 |---|---|---|---|---|
-| Embedding | SiliconFlow | `https://api.siliconflow.cn/v1/embeddings` | `BAAI/bge-m3`（1024 维） | `SiliconFlowEmbeddingClient` ✅ 已实现 |
-| Chat | **DeepSeek** | `https://api.deepseek.com/v1/chat/completions` | `deepseek-v4-pro`（已确认） | `DeepSeekChatClient` 🆕 v0.1 |
-| Rerank | SiliconFlow | `https://api.siliconflow.cn/v1/rerank` | `BAAI/bge-reranker-v2-m3` | `SiliconFlowRerankClient` ✅ 已实现 |
+| Embedding | SiliconFlow | `https://api.siliconflow.cn/v1/embeddings` | `BAAI/bge-m3`（1024 维） | `SiliconFlowEmbeddingClient` ✅ |
+| Chat | **DeepSeek** | `https://api.deepseek.com/v1/chat/completions` | `deepseek-v4-pro` | `DeepSeekChatClient` ✅ |
+| Rerank | SiliconFlow | `https://api.siliconflow.cn/v1/rerank` | `BAAI/bge-reranker-v2-m3` | `SiliconFlowRerankClient` ✅ |
 
-**Chat 客户端实现方式（已定）**：
+三个客户端共用同一个 `HttpClient` 小工具（TLS 证书校验、超时、429 指数退避），单文件约 100 行；
+DeepSeek 协议 OpenAI 兼容，`/v1/chat/completions` 直接可用。
 
-手写 `DeepSeekChatClient`，跟已有 `SiliconFlowEmbeddingClient` 完全对称（同一个 `HttpClient` 小工具，保留 TLS 证书校验、超时、429 退避），约 100 行。DeepSeek 协议 OpenAI 兼容，POST `/v1/chat/completions` 直接可用。
+### 3.2.2 端侧实现（预留，v0.1 未落地）
 
-`third_party/openai/openai.hpp` 已从仓库删除：它默认在 `Session` 构造里 `ignoreSSL()`（`CURLOPT_SSL_VERIFYPEER=0` / `CURLOPT_SSL_VERIFYHOST=0`），走公网 HTTPS 到 DeepSeek 等同关闭中间人防护，不符合本项目安全基线。model 名不做 hard-code，统一写在 `rag_config.json` 里。
+- 目标：`llama.cpp` 走 chat；`onnxruntime` + `bge-m3.onnx` 走 embedding / rerank；全部进程内推理，无网络依赖。
+- 触发条件：某个 App 明确需要离线运行 / 隐私要求 / 高频调用降低 token 成本。
+- 依赖：作为 CMake 条件编译选项（`AUTUMNDAWN_WITH_LLAMA_CPP=ON` / `_WITH_ONNX=ON`），默认关闭，
+  避免为纯云端场景引入巨型第三方依赖。
+- 落地位置：`src/inference/local/` 下每个引擎自持一包（同 storage 后端的做法）；实现同一组
+  `I*Model` 接口，上层零改动。
 
-**config 合并（已确认）**：`emb_config.json` 升级为 `rag_config.json`，顶层按功能块包裹，
-当前只有 `model` 一项（后续平级新增 `retrieval` / `splitter` / `storage` 等）：
+### 3.2.3 配置形态与工厂装配
 
-```jsonc
-{
-  "model": {
-    "embedding": {
-      "provider": "siliconflow",
-      "base_url": "https://api.siliconflow.cn/v1",
-      "api_key": "sk-...",
-      "model": "BAAI/bge-m3"
-    },
-    "chat": {
-      "provider": "deepseek",
-      "base_url": "https://api.deepseek.com/v1",
-      "api_key": "sk-...",
-      "model": "deepseek-v4-pro"
-    },
-    "rerank": {
-      "provider": "siliconflow",
-      "base_url": "https://api.siliconflow.cn/v1",
-      "api_key": "sk-...",
-      "model": "BAAI/bge-reranker-v2-m3"
-    }
-  }
-}
-```
+`model` 下三段（embedding / chat / rerank）结构一致，`provider` 字段必填，按值分派到 cloud
+（`base_url`/`api_key`/`model`）或 local（`llama_cpp` / `onnx`，`model_path` + 可选调参项）——
+配置结构为 `std::variant<CloudInferenceConfig, LocalInferenceConfig>`；`rerank` 段为 `std::optional`，
+缺失或 api_key 为占位符时视为未启用。
 
-`rag_config.json` 加入 `.gitignore`；仓库只保留 `rag_config.example.json`。日志中不打印任何 `api_key`。
+装配统一走 `rag/model_factory.hpp` 的 `createEmbeddingModel` / `createChatModel` / `createRerankModel`，
+按 provider 真分派到具体实现（当前：embedding=`siliconflow`、chat=`deepseek`、rerank=`siliconflow`）；
+不匹配的组合抛 `ConfigError`；local 分支目前一律抛 `ConfigError`，实现待落地。
 
-**provider 判别与工厂装配（v0.1 落地）**：`model` 下三个段结构一致，由 `provider` 字段判别后端——
-cloud 接受具名厂商标识（`siliconflow` / `deepseek`，不再接受 `openai_compatible` 这种协议名），
-要求 `base_url`/`api_key`/`model`；local（`llama_cpp` / `onnx`，端侧进程内推理预留）要求 `model_path`
-（可选 `n_ctx`/`n_threads`/`n_gpu_layers`）。配置结构为 `std::variant<CloudInferenceConfig, LocalInferenceConfig>`；
-`rerank` 段为 `std::optional`，缺失或 api_key 为占位符时视为未启用；`provider` 字段必填，不接受缺省。
-装配统一走 `rag/model_factory.hpp` 的 `createEmbeddingModel` / `createChatModel` / `createRerankModel`：
-cloud 分支内部**按 `provider` 真分派**（embedding=`siliconflow` → `SiliconFlowEmbeddingClient`；
-chat=`deepseek` → `DeepSeekChatClient`；rerank=`siliconflow` → `SiliconFlowRerankClient`），
-不匹配的组合（如 embedding=`deepseek`、chat=`siliconflow`、rerank=`deepseek`）抛 `ConfigError`，
-未来新接供应商时在 factory 内新增 `if` 分支即可；local 分支目前抛 `ConfigError`（实现待落地，
-届时配套 CMake 条件编译选项）。
-接口约定实现不保证线程安全，调用方串行访问；`IChatModel` 后续按需要以默认实现方式补 `chatStream`。
+包含敏感 key 的 `*.json` 加入 `.gitignore`；仓库只保留 `*.example.json`；日志中不打印任何 `api_key`。
+接口约定实现不保证线程安全，调用方串行访问；`IChatModel` 后续按需以默认实现方式补 `chatStream`。
 
-### 3.3 分词 / Chunking
+### 3.2.4 加一个新推理供应商的固定三步
+
+1. 新增 `src/inference/cloud/<vendor>_<capability>_client.{hpp,cpp}`（端侧则是
+   `src/inference/local/<engine>_<capability>_model.{hpp,cpp}`），实现对应 `I*Model` 接口；
+2. `src/config.cpp` 的 `isCloudProvider` / `isLocalProvider` 里加入新 provider 字符串；
+3. `src/model_factory.cpp` 里对应 `create*Model` 加一支 `if (c.provider == "<vendor>")` 分派。
+
+`retrieval/`、`storage/`、`pipeline`、App 全部零改动。
+
+## 3.3 分词 / Chunking
 
 - v0.1：字符长度 + 段落边界的 `RecursiveCharacterTextSplitter`（LangChain 里最常用的那种），无需外部依赖。参数：`chunk_size=512 tokens ≈ 1200 chars`, `chunk_overlap=64`（中文按字符估算 token）。
 - v0.4+：如果 chunk 精度/成本要求上来，再引入 tokenizer（选项：`tiktoken-cpp`, `sentencepiece`）。
 
-### 3.4 Prompt 模板
+## 3.4 Prompt 模板
 
 - 极简：`PromptTemplate::format(name, {{"question", q}, {"context", ctx}})`，用 `{key}` 占位符 + `std::string::find` 替换即可。
 - 模板集中放在 `include/rag/prompts/*.txt`（编译期 `configure_file` 拷贝到运行目录）。
 
-### 3.5 JSON / HTTP / 日志
+## 3.5 JSON / HTTP / 日志
 
 - JSON：`nlohmann/json`（已在 third_party）。
 - HTTP：`libcurl`（已装）。抽个 `HttpClient` 小工具，统一超时/重试/TLS/UA。
 - 日志：v0.1 用 `iostream` 打点；后续视需要引入 `spdlog`。
 - 错误处理：走异常（`RagError` 基类 + 子类 `HttpError` / `LlmError` / `IndexError`）。
 
-### 3.6 并发 / 限流
+## 3.6 并发 / 限流
 
 - 硅基流动免费额度存在 QPS 限制，`embedBatch` 需要限速 + 指数回退（HTTP 429）。Phase 1 里就把它做进 `HttpClient`。
 
-### 3.7 测试
+## 3.7 测试
 
 - 单元测试：`doctest`（单头，最省事）覆盖 `TextSplitter` / `PromptTemplate` / `fusion::rrf` / `Router` schema 校验等纯逻辑。
 - 集成测试：mock 一个 `IEmbeddingModel`（返回固定向量）+ 一个 `IGenerator`（返回固定字符串），用真实 ObjectBox 跑 pipeline，保证 CI 不消耗 API。
 
 ---
 
-## 4. 迭代计划（按学习路径重排）
+# 4. 迭代计划（按学习路径重排）
 
 | 版本 | 对应课程 | 交付物 | 验收 |
 |---|---|---|---|
@@ -348,7 +392,7 @@ chat=`deepseek` → `DeepSeekChatClient`；rerank=`siliconflow` → `SiliconFlow
 
 ---
 
-## 5. 下一步动作
+# 5. 下一步动作
 
 无需再多讨论，我按上面结论直接进入 v0.1：
 
@@ -356,8 +400,8 @@ chat=`deepseek` → `DeepSeekChatClient`；rerank=`siliconflow` → `SiliconFlow
 2. 把 `SiliconFlowEmbeddingClient` 挪进新库，`examples/tutorials/embedding_test` 改成链接新库（保持它继续可跑，作为最小示例）；
 3. 新增 `HttpClient`（保留 TLS 校验、带超时/429 退避）；
 4. 新增 `DeepSeekChatClient`；
-5. 新增 `TextSplitter`（递归字符/段落）+ `PromptTemplate` + `ObjectBoxRetriever` + `RagPipeline`；
+5. 新增 `TextSplitter`（递归字符/段落）+ `PromptTemplate` + storage 层（`IVectorStore` + `ObjectBoxVectorStore`）+ `VectorStoreRetriever` + `RagPipeline`；
 6. 新增 `examples/rag_apps/rag_basic/`（`ingest` / `ask` 两条命令）；
-7. `rag_config.example.json` 落库，README 简单更新。
+7. `rag_config.example.json` 落库（含 `model` + `storage` 段），README 简单更新。
 
 完成后我再喊你 review 一遍接口签名（`IRetriever` / `IGenerator` / `Document` schema）就往 v0.2 走。

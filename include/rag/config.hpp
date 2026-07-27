@@ -47,13 +47,29 @@ struct ModelConfig {
     std::optional<InferenceBackendConfig> rerank;  ///< nullopt = 未启用 rerank
 };
 
+/// ObjectBox 向量库后端配置。
+struct ObjectBoxStorageConfig {
+    std::string provider;                       ///< 固定为 "objectbox"
+    std::string directory = "objectbox-db";     ///< ObjectBox 数据库目录（相对/绝对均可）
+};
+
+/// 向量存储后端联合体。未来新增 Qdrant / FAISS / in_memory 等：
+/// 1) 在此增加对应 *StorageConfig；2) 加入 variant；3) 在 store_factory 里分派。
+using StorageBackendConfig = std::variant<ObjectBoxStorageConfig>;
+
 /// v0.1 及以后的统一配置：rag_config.json
-///   { "model": { "embedding": {...}, "chat": {...}, "rerank": {...} }, ... }
+///   {
+///     "model":   { "embedding": {...}, "chat": {...}, "rerank": {...} },
+///     "storage": { "provider": "objectbox", "directory": "objectbox-db" },
+///     ...
+///   }
 /// - "model" 段包含三类推理后端；rerank 可选：段缺失或 cloud api_key
 ///   为占位符时视为未配置（nullopt），不抛错。
-/// - 后续其他顶层段（如 retrieval / splitter / storage）在 RagConfig 内平级新增。
+/// - "storage" 段可选：缺失时默认使用 ObjectBox + `objectbox-db` 目录。
+/// - 后续其他顶层段（如 retrieval / splitter）在 RagConfig 内平级新增。
 struct RagConfig {
     ModelConfig model;
+    StorageBackendConfig storage;
 };
 
 RagConfig loadRagConfig(const std::string& path);

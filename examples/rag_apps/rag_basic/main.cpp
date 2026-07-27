@@ -1,12 +1,10 @@
 // rag_basic —— v0.1 端到端最小 RAG 演示。
 // 命令行交互：
-//   ingest <path>       读入文本文件、切块、embedding、写 ObjectBox
+//   ingest <path>       读入文本文件、切块、embedding、写向量库
 //   ask    <question>   embedding query → HNSW 检索 topK → DeepSeek 生成答案
 //   ls                  打印当前库里的文档数
 //   clear               清空所有文档
 //   help / exit         帮助 / 退出
-
-#define OBX_CPP_FILE  // 让 objectbox.hpp 中的实现在本 TU materialize
 
 #include <cinttypes>
 #include <cstdio>
@@ -17,14 +15,13 @@
 #include <string>
 #include <vector>
 
-#include "objectbox.hpp"
-
 #include "rag/config.hpp"
 #include "rag/generator.hpp"
 #include "rag/log.hpp"
 #include "rag/model_factory.hpp"
-#include "rag/objectbox_retriever.hpp"
 #include "rag/pipeline.hpp"
+#include "rag/retrieval/vector_store_retriever.hpp"
+#include "rag/store_factory.hpp"
 #include "rag/text_splitter.hpp"
 
 namespace rag = autumndawn::rag;
@@ -81,11 +78,6 @@ void printHelp() {
 int main(int argc, char** argv) {
     std::cout << "** autumndawn.cpp · rag_basic (v0.1) **" << std::endl;
 
-    if (!obx_has_feature(OBXFeature_VectorSearch)) {
-        LOG(ERROR) << "This ObjectBox build has no vector search support.";
-        return 1;
-    }
-
     const std::string configPath = argc >= 2 ? argv[1] : "rag_config.json";
 
     rag::RagConfig cfg;
@@ -99,19 +91,17 @@ int main(int argc, char** argv) {
 
     std::shared_ptr<rag::inference::IEmbeddingModel> embModel;
     std::shared_ptr<rag::inference::IChatModel> chatModel;
+    std::shared_ptr<rag::storage::IVectorStore> store;
     try {
         embModel = rag::createEmbeddingModel(cfg.model.embedding, rag::kEmbeddingDim);
         chatModel = rag::createChatModel(cfg.model.chat);
+        store = rag::createVectorStore(cfg.storage, rag::kEmbeddingDim);
     } catch (const std::exception& e) {
-        LOG(ERROR) << "Failed to create inference models: " << e.what();
+        LOG(ERROR) << "Startup failed: " << e.what();
         return 1;
     }
 
-    obx::Options options(rag::createRagModel());
-    options.directory("objectbox-db");
-    obx::Store store(options);
-
-    auto retriever = std::make_shared<rag::ObjectBoxRetriever>(store, embModel);
+    auto retriever = std::make_shared<rag::VectorStoreRetriever>(embModel, store);
     auto generator = std::make_shared<rag::ChatGenerator>(chatModel);
     rag::RagPipeline pipeline(retriever, generator);
 
@@ -132,9 +122,9 @@ int main(int argc, char** argv) {
             } else if (cmd == "help" || cmd == "?") {
                 printHelp();
             } else if (cmd == "ls") {
-                std::cout << "Stored documents: " << retriever->count() << std::endl;
+                std::cout << "Stored documents: " << store->count() << std::endl;
             } else if (cmd == "clear") {
-                auto removed = retriever->clearAll();
+                auto removed = store->clearAll();
                 std::cout << "Removed " << removed << " documents." << std::endl;
             } else if (cmd == "ingest") {
                 if (args.size() < 2) {
@@ -151,7 +141,7 @@ int main(int argc, char** argv) {
                 std::cout << "Embedding " << chunks.size() << " chunk(s) from " << path
                           << " ..." << std::endl;
                 retriever->ingest(chunks, path);
-                std::cout << "Done. Total docs now: " << retriever->count() << std::endl;
+                std::cout << "Done. Total docs now: " << store->count() << std::endl;
             } else if (cmd == "ask") {
                 if (args.size() < 2) {
                     LOG(WARNING) << "Usage: ask <question> [topK]";

@@ -18,5 +18,9 @@
             "api_key": "sk-your-siliconflow-key-here",
             "model": "BAAI/bge-reranker-v2-m3"
         }
+    },
+    "storage": {
+        "provider": "objectbox",
+        "directory": "objectbox-db"
     }
 }

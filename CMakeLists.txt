@@ -30,11 +30,12 @@ add_library(autumndawn_rag STATIC
     src/inference/cloud/deepseek_chat_client.cpp
     src/inference/cloud/siliconflow_rerank_client.cpp
 
-    # obx (ObjectBox generated code for Document entity)
-    src/obx/document.obx.cpp
+    # storage (ObjectBox 后端 + 生成绑定；新后端在 src/storage/<backend>/ 下平级新增)
+    src/storage/objectbox/document.obx.cpp
+    src/storage/objectbox/objectbox_store.cpp
 
     # retrieval
-    src/retrieval/objectbox_retriever.cpp
+    src/retrieval/vector_store_retriever.cpp
 
     # core
     src/text_splitter.cpp
@@ -43,6 +44,7 @@ add_library(autumndawn_rag STATIC
     src/pipeline.cpp
     src/config.cpp
     src/model_factory.cpp
+    src/store_factory.cpp
 )
 
 target_include_directories(autumndawn_rag
@@ -51,7 +53,7 @@ target_include_directories(autumndawn_rag
         $<BUILD_INTERFACE:${AUTUMNDAWN_THIRD_PARTY}>            # nlohmann/json.hpp
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/obx                    # document.obx.hpp / objectbox-model.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/storage/objectbox      # document.obx.hpp / objectbox-model.h
 )
 
 target_link_libraries(autumndawn_rag

@@ -117,6 +117,28 @@ std::optional<InferenceBackendConfig> parseBackendSection(const json& j, const c
                       "; local: " + kLocalProviders + ")");
 }
 
+/// 解析 storage 段。当前仅支持 `provider: "objectbox"`；未来新增 Qdrant / FAISS /
+/// in_memory 等只需在此加 else-if 分支，`loadRagConfig` 不用改动。
+StorageBackendConfig parseStorageSection(const json& s) {
+    if (!s.is_object()) {
+        throw ConfigError("Config section 'storage' must be an object");
+    }
+    const std::string provider = requireString(s, "storage", "provider");
+    if (provider == "objectbox") {
+        ObjectBoxStorageConfig ob;
+        ob.provider = provider;
+        if (s.contains("directory")) {
+            if (!s["directory"].is_string()) {
+                throw ConfigError("Config 'storage.directory' must be a string");
+            }
+            ob.directory = s["directory"].get<std::string>();
+        }
+        return ob;
+    }
+    throw ConfigError("Config 'storage.provider' has unsupported value '" + provider +
+                      "' (supported: objectbox)");
+}
+
 }  // namespace
 
 RagConfig loadRagConfig(const std::string& path) {
@@ -136,6 +158,7 @@ RagConfig loadRagConfig(const std::string& path) {
     }
 
     RagConfig cfg;
+    // model
     if (!j.contains("model")) {
         throw ConfigError("Missing top-level config section: model");
     }
@@ -146,6 +169,17 @@ RagConfig loadRagConfig(const std::string& path) {
     cfg.model.embedding = *parseBackendSection(m, "embedding", /*required=*/true);
     cfg.model.chat = *parseBackendSection(m, "chat", /*required=*/true);
     cfg.model.rerank = parseBackendSection(m, "rerank", /*required=*/false);
+
+    // storage
+    if (!j.contains("storage")) {
+        throw ConfigError("Missing top-level config section: storage (supported: objectbox)");
+    }
+    const auto& s = j["storage"];
+    if (!s.is_object()) {
+        throw ConfigError("Config section 'storage' must be an object");
+    }
+    cfg.storage = parseStorageSection(s);
+
     return cfg;
 }
 
