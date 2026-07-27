@@ -97,12 +97,11 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // 由工厂按配置里的 provider 装配推理模型（cloud / local）。
     std::shared_ptr<rag::inference::IEmbeddingModel> embModel;
     std::shared_ptr<rag::inference::IChatModel> chatModel;
     try {
-        embModel = rag::createEmbeddingModel(cfg.embedding, rag::kEmbeddingDim);
-        chatModel = rag::createChatModel(cfg.chat);
+        embModel = rag::createEmbeddingModel(cfg.model.embedding, rag::kEmbeddingDim);
+        chatModel = rag::createChatModel(cfg.model.chat);
     } catch (const std::exception& e) {
         LOG(ERROR) << "Failed to create inference models: " << e.what();
         return 1;

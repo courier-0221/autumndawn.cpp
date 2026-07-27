@@ -29,6 +29,11 @@ std::string ChatGenerator::generate(const std::string& query,
         {"user", userMsg},
     };
 
+    // LOG(INFO) << "ChatGenerator: sending " << messages.size() << " messages to chat model";
+    // for (std::size_t i = 0; i < messages.size(); ++i) {
+    //     LOG(INFO) << "  [" << messages[i].role << "] " << messages[i].content;
+    // }
+
     return chat_->chat(messages, options_.chat);
 }
 

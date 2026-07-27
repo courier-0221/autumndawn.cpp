@@ -23,11 +23,11 @@ bool looksLikePlaceholder(const std::string& key) {
 }
 
 /// 受支持的 provider 列表，用于校验与报错提示。
-constexpr const char* kCloudProviders = "siliconflow, deepseek, openai_compatible";
+constexpr const char* kCloudProviders = "siliconflow, deepseek";
 constexpr const char* kLocalProviders = "llama_cpp, onnx";
 
 bool isCloudProvider(const std::string& p) {
-    return p == "siliconflow" || p == "deepseek" || p == "openai_compatible";
+    return p == "siliconflow" || p == "deepseek";
 }
 
 bool isLocalProvider(const std::string& p) {
@@ -76,7 +76,6 @@ LocalInferenceConfig parseLocal(const json& s, const char* section, std::string 
 }
 
 /// 解析推理段（embedding / chat / rerank）：provider 判别 cloud / local。
-/// provider 缺省且存在 base_url 时按 cloud（openai_compatible）解析，向后兼容旧配置。
 /// required=false 时：段缺失或 cloud api_key 为占位符返回 nullopt（视为未配置），不抛。
 std::optional<InferenceBackendConfig> parseBackendSection(const json& j, const char* section,
                                                           bool required) {
@@ -97,8 +96,6 @@ std::optional<InferenceBackendConfig> parseBackendSection(const json& j, const c
             throw ConfigError(std::string("Config '") + section + ".provider' must be a string");
         }
         provider = s["provider"].get<std::string>();
-    } else if (s.contains("base_url")) {
-        provider = "openai_compatible";  // 旧格式无 provider 字段，按云端处理
     } else {
         throw ConfigError(std::string("Config '") + section +
                           "' missing 'provider' (supported cloud: " + kCloudProviders +
@@ -139,9 +136,16 @@ RagConfig loadRagConfig(const std::string& path) {
     }
 
     RagConfig cfg;
-    cfg.embedding = *parseBackendSection(j, "embedding", /*required=*/true);
-    cfg.chat = *parseBackendSection(j, "chat", /*required=*/true);
-    cfg.rerank = parseBackendSection(j, "rerank", /*required=*/false);
+    if (!j.contains("model")) {
+        throw ConfigError("Missing top-level config section: model");
+    }
+    const auto& m = j["model"];
+    if (!m.is_object()) {
+        throw ConfigError("Config section 'model' must be an object");
+    }
+    cfg.model.embedding = *parseBackendSection(m, "embedding", /*required=*/true);
+    cfg.model.chat = *parseBackendSection(m, "chat", /*required=*/true);
+    cfg.model.rerank = parseBackendSection(m, "rerank", /*required=*/false);
     return cfg;
 }
 

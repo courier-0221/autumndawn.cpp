@@ -27,7 +27,7 @@ std::shared_ptr<inference::IEmbeddingModel> createEmbeddingModel(
 std::shared_ptr<inference::IChatModel> createChatModel(const InferenceBackendConfig& cfg);
 
 /// 创建 rerank 模型。
-/// 调用前先判断 RagConfig::rerank 是否有值（nullopt 表示未启用 rerank）。
+/// 调用前先判断 RagConfig::model.rerank 是否有值（nullopt 表示未启用 rerank）。
 std::shared_ptr<inference::IRerankModel> createRerankModel(const InferenceBackendConfig& cfg);
 
 }  // namespace autumndawn::rag

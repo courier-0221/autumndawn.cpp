@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "rag/log.hpp"
 #include "rag/inference/chat_model.hpp"
 
 namespace autumndawn::rag::inference {

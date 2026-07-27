@@ -14,8 +14,8 @@ public:
     explicit ConfigError(const std::string& what) : std::runtime_error(what) {}
 };
 
-/// 云端推理段（OpenAI 兼容协议）。
-/// provider 接受："siliconflow" / "deepseek" / "openai_compatible"。
+/// provider 接受具名厂商标识："siliconflow" / "deepseek"，
+/// model_factory 会根据 provider 分派到具体 client。
 struct CloudInferenceConfig {
     std::string provider;
     std::string baseUrl;
@@ -33,26 +33,29 @@ struct LocalInferenceConfig {
     int nGpuLayers = 0;    ///< 0 = 纯 CPU
 };
 
-/// embedding / chat / rerank 段的后端配置：由 provider 判别 cloud / local。
 using InferenceBackendConfig = std::variant<CloudInferenceConfig, LocalInferenceConfig>;
 
 /// ObjectBox Document schema 中 HNSW 索引写死的向量维度（bge-m3）。
 /// 切换 embedding 模型时若维度不同，需要同步修改 schema 并重建库。
 inline constexpr std::size_t kEmbeddingDim = 1024;
 
-/// v0.1 及以后的统一配置：rag_config.json
-///   { "embedding": {...}, "chat": {...}, "rerank": {...} }
-/// - 三个段结构一致，均由 "provider" 字段判别 cloud / local；
-///   provider 缺省且存在 base_url 时按 cloud 解析（向后兼容旧配置）。
-/// - rerank 段可选：段缺失或 cloud api_key 为占位符时视为未配置（nullopt），不抛错。
-struct RagConfig {
+/// 推理模型段：embedding / chat / rerank。
+/// 三个段结构一致，均由各自的 "provider" 字段判别 cloud / local。
+struct ModelConfig {
     InferenceBackendConfig embedding;
     InferenceBackendConfig chat;
     std::optional<InferenceBackendConfig> rerank;  ///< nullopt = 未启用 rerank
 };
 
-/// 从 JSON 文件加载 RagConfig。
-/// 失败抛 ConfigError。cloud 段会拒绝 api_key 为空 / 明显 placeholder 的配置。
+/// v0.1 及以后的统一配置：rag_config.json
+///   { "model": { "embedding": {...}, "chat": {...}, "rerank": {...} }, ... }
+/// - "model" 段包含三类推理后端；rerank 可选：段缺失或 cloud api_key
+///   为占位符时视为未配置（nullopt），不抛错。
+/// - 后续其他顶层段（如 retrieval / splitter / storage）在 RagConfig 内平级新增。
+struct RagConfig {
+    ModelConfig model;
+};
+
 RagConfig loadRagConfig(const std::string& path);
 
 }  // namespace autumndawn::rag

@@ -257,40 +257,47 @@ namespace autumndawn::rag {                        // 顶层：pipeline / genera
 
 `third_party/openai/openai.hpp` 已从仓库删除：它默认在 `Session` 构造里 `ignoreSSL()`（`CURLOPT_SSL_VERIFYPEER=0` / `CURLOPT_SSL_VERIFYHOST=0`），走公网 HTTPS 到 DeepSeek 等同关闭中间人防护，不符合本项目安全基线。model 名不做 hard-code，统一写在 `rag_config.json` 里。
 
-**config 合并（已确认）**：`emb_config.json` 升级为 `rag_config.json`：
+**config 合并（已确认）**：`emb_config.json` 升级为 `rag_config.json`，顶层按功能块包裹，
+当前只有 `model` 一项（后续平级新增 `retrieval` / `splitter` / `storage` 等）：
 
 ```jsonc
 {
-  "embedding": {
-    "provider": "siliconflow",
-    "base_url": "https://api.siliconflow.cn/v1",
-    "api_key": "sk-...",
-    "model": "BAAI/bge-m3"
-  },
-  "chat": {
-    "provider": "deepseek",
-    "base_url": "https://api.deepseek.com/v1",
-    "api_key": "sk-...",
-    "model": "deepseek-v4-pro"
-  },
-  "rerank": {
-    "provider": "siliconflow",
-    "base_url": "https://api.siliconflow.cn/v1",
-    "api_key": "sk-...",
-    "model": "BAAI/bge-reranker-v2-m3"
+  "model": {
+    "embedding": {
+      "provider": "siliconflow",
+      "base_url": "https://api.siliconflow.cn/v1",
+      "api_key": "sk-...",
+      "model": "BAAI/bge-m3"
+    },
+    "chat": {
+      "provider": "deepseek",
+      "base_url": "https://api.deepseek.com/v1",
+      "api_key": "sk-...",
+      "model": "deepseek-v4-pro"
+    },
+    "rerank": {
+      "provider": "siliconflow",
+      "base_url": "https://api.siliconflow.cn/v1",
+      "api_key": "sk-...",
+      "model": "BAAI/bge-reranker-v2-m3"
+    }
   }
 }
 ```
 
 `rag_config.json` 加入 `.gitignore`；仓库只保留 `rag_config.example.json`。日志中不打印任何 `api_key`。
 
-**provider 判别与工厂装配（v0.1 落地）**：三个段结构一致，由 `provider` 字段判别后端——
-cloud（`siliconflow` / `deepseek` / `openai_compatible`）要求 `base_url`/`api_key`/`model`；
-local（`llama_cpp` / `onnx`，端侧进程内推理预留）要求 `model_path`（可选 `n_ctx`/`n_threads`/`n_gpu_layers`）。
-配置结构为 `std::variant<CloudInferenceConfig, LocalInferenceConfig>`；`rerank` 段为 `std::optional`，
-缺失或 api_key 为占位符时视为未启用。`provider` 缺省且存在 `base_url` 时按 cloud 解析（向后兼容旧配置）。
+**provider 判别与工厂装配（v0.1 落地）**：`model` 下三个段结构一致，由 `provider` 字段判别后端——
+cloud 接受具名厂商标识（`siliconflow` / `deepseek`，不再接受 `openai_compatible` 这种协议名），
+要求 `base_url`/`api_key`/`model`；local（`llama_cpp` / `onnx`，端侧进程内推理预留）要求 `model_path`
+（可选 `n_ctx`/`n_threads`/`n_gpu_layers`）。配置结构为 `std::variant<CloudInferenceConfig, LocalInferenceConfig>`；
+`rerank` 段为 `std::optional`，缺失或 api_key 为占位符时视为未启用；`provider` 字段必填，不接受缺省。
 装配统一走 `rag/model_factory.hpp` 的 `createEmbeddingModel` / `createChatModel` / `createRerankModel`：
-cloud 分支返回对应 `*Client`，local 分支目前抛 `ConfigError`（实现待落地，届时配套 CMake 条件编译选项）。
+cloud 分支内部**按 `provider` 真分派**（embedding=`siliconflow` → `SiliconFlowEmbeddingClient`；
+chat=`deepseek` → `DeepSeekChatClient`；rerank=`siliconflow` → `SiliconFlowRerankClient`），
+不匹配的组合（如 embedding=`deepseek`、chat=`siliconflow`、rerank=`deepseek`）抛 `ConfigError`，
+未来新接供应商时在 factory 内新增 `if` 分支即可；local 分支目前抛 `ConfigError`（实现待落地，
+届时配套 CMake 条件编译选项）。
 接口约定实现不保证线程安全，调用方串行访问；`IChatModel` 后续按需要以默认实现方式补 `chatStream`。
 
 ### 3.3 分词 / Chunking

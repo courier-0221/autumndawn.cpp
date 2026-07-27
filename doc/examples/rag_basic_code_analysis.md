@@ -38,7 +38,19 @@ cd build/examples/rag_apps/rag_basic
 cp rag_config.example.json rag_config.json   # 然后填入你的 API key
 ```
 
-`rag_config.json` 结构（见 [rag_config.example.json](../../examples/rag_apps/rag_basic/rag_config.example.json)）：
+`rag_config.json` 结构（见 [rag_config.example.json](../../examples/rag_apps/rag_basic/rag_config.example.json)）顶层按功能块包裹，当前只有 `model`（后续平级新增 `retrieval` / `splitter` / `storage` 等）：
+
+```jsonc
+{
+  "model": {
+    "embedding": { ... },
+    "chat":      { ... },
+    "rerank":    { ... }
+  }
+}
+```
+
+`model` 下三个段：
 
 | 段 | 用途 | provider | 默认模型 |
 |---|---|---|---|
@@ -46,9 +58,10 @@ cp rag_config.example.json rag_config.json   # 然后填入你的 API key
 | `chat` | Chat API | `deepseek` | `deepseek-v4-pro` |
 | `rerank` | 重排序（可选，v0.1 未接入 pipeline） | `siliconflow` | `BAAI/bge-reranker-v2-m3` |
 
-三个段结构一致，由 `provider` 字段判别后端：`siliconflow` / `deepseek` / `openai_compatible` 走云端
+三个段结构一致，由 `provider` 字段判别后端：cloud 只接受具名厂商标识 `siliconflow` / `deepseek`
 （要求 `base_url`/`api_key`/`model`）；`llama_cpp` / `onnx` 为端侧进程内推理预留（要求 `model_path`）。
-`provider` 缺省且存在 `base_url` 时按云端解析，旧格式配置无需修改。
+`provider` 字段必填、不接受缺省，也不接受 `openai_compatible` 这种协议名。
+model_factory 会根据 provider 分派到具体 client，不匹配的组合（如 embedding=`deepseek`、chat=`siliconflow`）会抛 `ConfigError`。
 
 `loadRagConfig()` 会拒绝 embedding/chat 段 api_key 为空或明显是 placeholder 的配置，启动即失败并给出提示；
 `rerank` 段可选——整段缺失或 api_key 是 placeholder 时静默视为未启用。
@@ -120,10 +133,11 @@ graph TB
 1. `#define OBX_CPP_FILE`：让 `objectbox.hpp` 的模板实现在本编译单元实例化（ObjectBox C++ 绑定的单 TU 约定）。
 2. `loadRagConfig(configPath)`：解析 JSON 配置，失败抛 `ConfigError`，提示用户从 example 拷贝。
 3. 经 `model_factory` 按配置里的 `provider` 装配两个推理模型（`shared_ptr`，按接口持有）：
-   - `createEmbeddingModel(cfg.embedding, kEmbeddingDim)` → `IEmbeddingModel`；`kEmbeddingDim=1024` 与 bge-m3 输出维度及 ObjectBox 里 HNSW 索引维度一致，client 首次调用时校验。
-   - `createChatModel(cfg.chat)` → `IChatModel`。
-   当前 provider 均为云端，实际创建的是 `SiliconFlowEmbeddingClient` / `DeepSeekChatClient`
-  （实现在 `src/inference/cloud/`，头文件不对外暴露）；`provider` 写成 `llama_cpp` / `onnx` 会在启动时报错（端侧推理尚未实现）。
+   - `createEmbeddingModel(cfg.model.embedding, kEmbeddingDim)` → `IEmbeddingModel`；`kEmbeddingDim=1024` 与 bge-m3 输出维度及 ObjectBox 里 HNSW 索引维度一致，client 首次调用时校验。
+   - `createChatModel(cfg.model.chat)` → `IChatModel`。
+   factory 内部按 `provider` 真分派：`embedding=siliconflow` → `SiliconFlowEmbeddingClient`；
+  `chat=deepseek` → `DeepSeekChatClient`（实现在 `src/inference/cloud/`，头文件不对外暴露）；
+   不匹配的组合（如 `embedding=deepseek`、`chat=siliconflow`）会抛 `ConfigError`；`llama_cpp` / `onnx` 目前也抛错（端侧推理尚未实现）。
 4. 打开 ObjectBox：`obx::Options options(rag::createRagModel())` 加载 `Document` 实体模型（生成代码在 `src/obx/`），库目录固定为 `objectbox-db`。
 5. 组装管线：
    - `ObjectBoxRetriever(store, embModel)` 实现 `IRetriever`；

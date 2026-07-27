@@ -68,6 +68,8 @@ std::string DeepSeekChatClient::chat(const std::vector<ChatMessage>& messages,
         throw InferenceError(std::string("Failed to parse DeepSeek response: ") + e.what());
     }
 
+    // LOG(INFO) << "DeepSeek chat response: " << response.dump();
+
     if (!response.contains("choices") || !response["choices"].is_array() ||
         response["choices"].empty()) {
         throw InferenceError("Unexpected DeepSeek response (missing 'choices'): " + responseBody);
