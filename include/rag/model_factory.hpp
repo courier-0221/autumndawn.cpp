@@ -15,7 +15,7 @@ namespace autumndawn::rag {
 /// 不感知 config 的存在（分层约定见 doc/rag_cpp_plan.md）。
 ///
 /// 当前 provider 支持情况：
-/// - cloud（siliconflow / deepseek / openai_compatible）→ 对应云端 *Client；
+/// - cloud（siliconflow / deepseek）→ 对应云端 *Client；
 /// - local（llama_cpp / onnx）→ 端侧进程内推理本期尚未实现，抛 ConfigError。
 
 /// 创建 embedding 模型。

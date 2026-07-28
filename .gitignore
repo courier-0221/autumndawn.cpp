@@ -17,7 +17,7 @@ examples/tutorials/embedding_test/emb_config.json
 examples/rag_apps/rag_basic/rag_config.json
 
 # ==== 编辑器 / IDE ====
-.vscode/settings.json
+.vscode/
 .idea/
 *.swp
 *.swo
