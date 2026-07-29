@@ -32,11 +32,6 @@ public:
     /// 传入多轮消息，返回 assistant 回复文本。
     virtual std::string chat(const std::vector<ChatMessage>& messages,
                              const ChatOptions& options) = 0;
-
-    /// 便捷重载：使用默认 ChatOptions。
-    std::string chat(const std::vector<ChatMessage>& messages) {
-        return chat(messages, ChatOptions{});
-    }
 };
 
 }  // namespace autumndawn::rag::inference

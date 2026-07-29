@@ -15,6 +15,7 @@ objectbox-db/
 # 含真实 api_key 的运行时配置，仓库中只保留 *.example.json 模板
 examples/tutorials/embedding_test/emb_config.json
 examples/rag_apps/rag_basic/rag_config.json
+examples/rag_apps/rag_query_translate/rag_config.json
 
 # ==== 编辑器 / IDE ====
 .vscode/
