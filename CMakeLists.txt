@@ -38,6 +38,7 @@ add_library(autumndawn_rag STATIC
     src/retrieval/vector_store_retriever.cpp
     src/retrieval/multi_query_retriever.cpp
     src/retrieval/hyde_retriever.cpp
+    src/retrieval/reranking_retriever.cpp
 
     # core
     src/fusion.cpp
@@ -45,6 +46,7 @@ add_library(autumndawn_rag STATIC
     src/prompt_template.cpp
     src/generator.cpp
     src/pipeline.cpp
+    src/router.cpp
     src/config.cpp
     src/model_factory.cpp
     src/store_factory.cpp
@@ -72,6 +74,7 @@ target_compile_options(autumndawn_rag PRIVATE -Wall -Wextra -Wpedantic)
 # 手动运行的演示程序（交互式 CLI、ObjectBox quickstart 等）。
 add_subdirectory(examples/rag_apps/rag_basic)
 add_subdirectory(examples/rag_apps/rag_query_translate)
+add_subdirectory(examples/rag_apps/rag_route)
 
 # ---- test ---------------------------------------------------------------
 # 自动化单元测试骨架，默认关闭；接入具体测试框架后用

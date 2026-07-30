@@ -16,6 +16,7 @@ objectbox-db/
 examples/tutorials/embedding_test/emb_config.json
 examples/rag_apps/rag_basic/rag_config.json
 examples/rag_apps/rag_query_translate/rag_config.json
+examples/rag_apps/rag_route/rag_config.json
 
 # ==== 编辑器 / IDE ====
 .vscode/

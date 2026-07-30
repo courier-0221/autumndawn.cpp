@@ -1,0 +1,19 @@
+向量数据库通过高维向量之间的距离度量来实现语义检索，最常见的距离度量是余弦相似度和内积。写代码时可以直接调用 SDK 完成 embedding、入库、近邻查询这三步。
+
+HNSW（Hierarchical Navigable Small World，多层可导航小世界图）是一种近似最近邻搜索算法。它构建一个多层图结构，上层稀疏、下层稠密，查询时从上层入口贪心下探到最相似节点。相比暴力扫描能把百万级向量的检索延迟压到毫秒级。
+
+ObjectBox 是一款面向边缘设备的高性能嵌入式对象数据库，支持事务、关系和向量索引，数据直接存储在本地磁盘，无需网络。它提供 C++ / Java / Dart 等多语言绑定，常被用来在移动端或本地服务里做离线语义检索。
+
+RAG（Retrieval-Augmented Generation，检索增强生成）先从知识库中检索相关文档片段，再交给大语言模型生成答案，能大幅缓解模型幻觉并让答案有引用可查。它的三段式管线是 Index → Retrieve → Generate。
+
+Embedding 模型（如 BGE-M3、text-embedding-3、GTE）把一段文本编码成固定维度的浮点向量，语义相近的文本在向量空间里距离更近。1024 维和 768 维是当前最常见的两种规格。
+
+Reranker 模型属于 cross-encoder：把 (query, doc) 作为一对输入直接产出相关性打分。它比 embedding 的 bi-encoder 更慢但更准，工程上常用作向量粗召回后的精排一层。BGE-Reranker-v2-m3 是开源里效果非常均衡的选项之一。
+
+LangChain 是一个用来快速搭建 LLM 应用的 Python / TypeScript 框架，提供 Retriever、Chain、Agent、Memory 等一系列组件抽象，方便把 embedding、向量库、LLM、工具调用等拼在一起。C++ 生态里目前没有等价物，一般要自己抽接口。
+
+深度学习框架 PyTorch 由 Facebook / Meta 于 2016 年开源，以动态图和 Pythonic API 见长，是学术界最主流的深度学习工具，也是训练 embedding 模型和 rerank 模型的常用平台。
+
+FlatBuffers 是一种零解析的高效序列化格式，ObjectBox 内部用它做对象持久化，避免了每次读盘都要反序列化的开销。相比 JSON、Protobuf 更适合读多写少、延迟敏感的场景。
+
+在实际部署里，一个典型的生产级 RAG 系统会把 Router、Multi-Query、HyDE、Rerank 组合起来使用：Router 分流到不同知识库，Multi-Query / HyDE 提高召回，Rerank 收敛出精准 Top-K，最后由 LLM 组织答案。
